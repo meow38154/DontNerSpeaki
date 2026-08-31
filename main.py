@@ -37,6 +37,7 @@ class MyBot(discord.Client):
 bot = MyBot()
 
 file_path = "Schedule.txt"
+op_file_path = "opList.txt"
 
 def load_schedules():
     allSchedules.clear()
@@ -98,6 +99,12 @@ async def add_schedule(
     content: str,
     important: bool = False
 ):
+    if not is_op_user(interaction.user):
+        await interaction.response.send_message(
+            "권한이 없습니다.",
+            ephemeral=True
+        )
+        return
     
     if not days or not content:
         await interaction.response.send_message("일정 추가에 필요한 정보를 모두 입력해주세요.")
@@ -121,6 +128,13 @@ async def add_schedule(
 )
 async def remove_schedule(interaction: discord.Interaction):
 
+    if not is_op_user(interaction.user):
+        await interaction.response.send_message(
+            "권한이 없습니다.",
+            ephemeral=True
+        )
+        return
+    
     await interaction.response.defer(ephemeral=True)
 
     if not allSchedules:
@@ -224,5 +238,17 @@ async def schedule_notifier():
                     f"날짜: {important_schedule[0]}"
                 )
 
+def is_op_user(user: discord.Member) -> bool:
+    if not os.path.exists(op_file_path):
+        return False
+
+    with open(op_file_path, "r", encoding="utf-8") as f:
+        op_list = [
+            line.strip()
+            for line in f
+            if line.strip()
+        ]
+
+    return user.display_name in op_list
 
 bot.run(TOKEN)
