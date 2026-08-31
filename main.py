@@ -160,7 +160,8 @@ async def show_schedules(
     for schedule_date, content, important in allSchedules:
         message += f"날짜: {schedule_date} 내용: {content}\n"
 
-    await interaction.response.send_message(message)
+    await interaction.response.send_message(message,
+            ephemeral=True)
 
 
 #일정 정렬
