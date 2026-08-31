@@ -99,6 +99,13 @@ async def add_schedule(
     content: str,
     important: bool = False
 ):
+    now = datetime.now(KST)
+
+    print(
+    f"[{now:%Y-%m-%d %H:%M:%S}] "
+    f"{interaction.user.display_name} "
+    f"/일정추가 사용")   
+    
     if not is_op_user(interaction.user):
         await interaction.response.send_message(
             "권한이 없습니다.",
@@ -127,6 +134,13 @@ async def add_schedule(
     description="가장 최근에 등록된 일정을 제거합니다."
 )
 async def remove_schedule(interaction: discord.Interaction):
+
+    now = datetime.now(KST)
+
+    print(
+    f"[{now:%Y-%m-%d %H:%M:%S}] "
+    f"{interaction.user.display_name} "
+    f"/일정제거 사용")   
 
     if not is_op_user(interaction.user):
         await interaction.response.send_message(
@@ -162,6 +176,13 @@ async def remove_schedule(interaction: discord.Interaction):
 async def show_schedules(
     interaction: discord.Interaction
 ):
+    now = datetime.now(KST)
+
+    print(
+    f"[{now:%Y-%m-%d %H:%M:%S}] "
+    f"{interaction.user.display_name} "
+    f"/일정정리 사용")   
+
     if not allSchedules:
         await interaction.response.send_message(
             "등록된 일정이 없습니다.",
