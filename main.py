@@ -322,25 +322,59 @@ async def register_image(
         )
         return
 
-    os.makedirs(images_path, exist_ok=True)
+    # main.py가 있는 위치
+    base_path = os.path.dirname(os.path.abspath(__file__))
+
+    # /home/container/Images 같은 절대 경로
+    image_directory = os.path.join(base_path, "Images")
+
+    os.makedirs(image_directory, exist_ok=True)
 
     extension = os.path.splitext(image.filename)[1]
-
     file_name = f"{name}{extension}"
 
     image_path = os.path.join(
-        images_path,
+        image_directory,
         file_name
     )
 
-    await image.save(image_path)
+    try:
+        # 디스코드에 올라온 이미지 데이터 직접 읽기
+        image_data = await image.read()
+
+        # 실제 파일로 직접 저장
+        with open(image_path, "wb") as f:
+            f.write(image_data)
+
+    except Exception as e:
+        await interaction.response.send_message(
+            f"이미지 저장 실패:\n`{e}`",
+            ephemeral=True
+        )
+        return
+
+    # 진짜 저장됐는지 검사
+    if not os.path.isfile(image_path):
+        await interaction.response.send_message(
+            f"파일 저장에 실패했습니다.\n"
+            f"`{image_path}`",
+            ephemeral=True
+        )
+        return
+
+    file_size = os.path.getsize(image_path)
+
+    print(f"이미지 저장 완료: {image_path}")
+    print(f"파일 크기: {file_size} bytes")
+    print(f"Images 폴더 내용: {os.listdir(image_directory)}")
 
     await interaction.response.send_message(
         f"이미지가 등록되었습니다.\n"
-        f"이름: `{file_name}`",
+        f"이름: `{file_name}`\n"
+        f"크기: `{file_size} bytes`\n"
+        f"저장 경로: `{image_path}`",
         ephemeral=True
     )
-
 # 일정 정렬
 def sort_schedules():
     allSchedules.sort(
