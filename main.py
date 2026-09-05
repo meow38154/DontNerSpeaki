@@ -307,20 +307,14 @@ async def show_schedules(
     description="이미지를 등록합니다."
 )
 @app_commands.describe(
-    image="이미지"
+    name="저장할 이미지 이름",
+    image="등록할 이미지"
 )
 async def register_image(
     interaction: discord.Interaction,
+    name: str,
     image: discord.Attachment
 ):
-    now = datetime.now(KST)
-
-    print(
-        f"[{now:%Y-%m-%d %H:%M:%S}] "
-        f"{interaction.user.display_name} "
-        f"/이미지등록 사용"
-    )
-
     if not is_op_user(interaction.user):
         await interaction.response.send_message(
             "권한이 없습니다.",
@@ -328,32 +322,24 @@ async def register_image(
         )
         return
 
-    os.makedirs(
-        images_path,
-        exist_ok=True
-    )
+    os.makedirs(images_path, exist_ok=True)
 
-    file_name = os.path.basename(
-        image.filename
-    )
+    extension = os.path.splitext(image.filename)[1]
+
+    file_name = f"{name}{extension}"
 
     image_path = os.path.join(
         images_path,
         file_name
     )
 
-    await image.save(
-        image_path
-    )
-
-    display_path = image_path.replace("\\", "/")
+    await image.save(image_path)
 
     await interaction.response.send_message(
         f"이미지가 등록되었습니다.\n"
-        f"경로: `{display_path}`",
+        f"이름: `{file_name}`",
         ephemeral=True
     )
-
 
 # 일정 정렬
 def sort_schedules():
