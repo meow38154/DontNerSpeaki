@@ -14,7 +14,8 @@ GUILD_ID = int(os.getenv("DISCORD_GUILD_ID"))
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 KST = ZoneInfo("Asia/Seoul")
 
-allSchedules: list[tuple[date, str, bool]] = []
+allSchedules: list[tuple[date, str, bool, str | None]] = []
+
 
 class MyBot(discord.Client):
     def __init__(self):
@@ -38,6 +39,9 @@ bot = MyBot()
 
 file_path = "Schedule.txt"
 op_file_path = "opList.txt"
+mention_file_path = "mentionList.txt"
+images_path = "Images"
+
 
 def load_schedules():
     allSchedules.clear()
@@ -53,8 +57,7 @@ def load_schedules():
                 continue
 
             try:
-                date_text, rest = line.split(" ", 1)
-                content, important_text = rest.rsplit(" ", 1)
+                date_text, content, important_text, image = line.split("|", 3)
 
                 schedule_date = datetime.strptime(
                     date_text,
@@ -63,14 +66,18 @@ def load_schedules():
 
                 important = important_text == "True"
 
+                if image == "None" or image == "":
+                    image = None
+
                 allSchedules.append(
-                    (schedule_date, content, important)
+                    (schedule_date, content, important, image)
                 )
 
             except ValueError:
                 print(f"잘못된 일정 형식: {line}")
 
     sort_schedules()
+
 
 @bot.event
 async def on_ready():
@@ -90,6 +97,7 @@ async def on_ready():
     month="월",
     days="일정 날짜",
     content="일정 내용",
+    image="등록된 이미지 경로 (선택 사항, 예: Images/test.png)",
     important="중요 여부 (선택 사항, 기본값: False)"
 )
 async def add_schedule(
@@ -97,36 +105,71 @@ async def add_schedule(
     month: str,
     days: str,
     content: str,
+    image: str | None = None,
     important: bool = False
 ):
     now = datetime.now(KST)
 
     print(
-    f"[{now:%Y-%m-%d %H:%M:%S}] "
-    f"{interaction.user.display_name} "
-    f"/일정추가 사용")   
-    
+        f"[{now:%Y-%m-%d %H:%M:%S}] "
+        f"{interaction.user.display_name} "
+        f"/일정추가 사용"
+    )
+
     if not is_op_user(interaction.user):
         await interaction.response.send_message(
             "권한이 없습니다.",
             ephemeral=True
         )
         return
-    
+
     if not days or not content:
-        await interaction.response.send_message("일정 추가에 필요한 정보를 모두 입력해주세요.")
+        await interaction.response.send_message(
+            "일정 추가에 필요한 정보를 모두 입력해주세요.",
+            ephemeral=True
+        )
         return
+
+    try:
+        schedule_date = date(
+            2026,
+            int(month),
+            int(days)
+        )
+    except ValueError:
+        await interaction.response.send_message(
+            "올바른 날짜를 입력해주세요.",
+            ephemeral=True
+        )
+        return
+
+    if image and not os.path.isfile(image):
+        await interaction.response.send_message(
+            f"이미지를 찾을 수 없습니다.\n"
+            f"경로: `{image}`",
+            ephemeral=True
+        )
+        return
+
+    allSchedules.append(
+        (
+            schedule_date,
+            content,
+            important,
+            image
+        )
+    )
+
+    refresh_notepad()
 
     await interaction.response.send_message(
         f"일정이 추가되었습니다.\n"
         f"날짜: {month}월 {days}일\n"
         f"내용: {content}\n"
+        f"이미지: {image if image else '없음'}\n"
         f"중요한 일정 여부: {'맞음' if important else '아님'}",
         ephemeral=True
     )
-
-    allSchedules.append((date(2026, int(month), int(days)), content, important))
-    refresh_notepad()
 
 
 @bot.tree.command(
@@ -138,9 +181,10 @@ async def remove_schedule(interaction: discord.Interaction):
     now = datetime.now(KST)
 
     print(
-    f"[{now:%Y-%m-%d %H:%M:%S}] "
-    f"{interaction.user.display_name} "
-    f"/일정제거 사용")   
+        f"[{now:%Y-%m-%d %H:%M:%S}] "
+        f"{interaction.user.display_name} "
+        f"/일정제거 사용"
+    )
 
     if not is_op_user(interaction.user):
         await interaction.response.send_message(
@@ -148,7 +192,7 @@ async def remove_schedule(interaction: discord.Interaction):
             ephemeral=True
         )
         return
-    
+
     await interaction.response.defer(ephemeral=True)
 
     if not allSchedules:
@@ -157,16 +201,69 @@ async def remove_schedule(interaction: discord.Interaction):
         )
         return
 
-    removed_date, removed_content, removed_important = allSchedules.pop()
+    removed_date, removed_content, removed_important, removed_image = allSchedules.pop()
 
     await interaction.edit_original_response(
         content=(
-        f"날짜: {removed_date}\n"
-        f"내용: {removed_content}\n"
-        f"일정이 제거되었습니다.")
+            f"날짜: {removed_date}\n"
+            f"내용: {removed_content}\n"
+            f"일정이 제거되었습니다."
+        )
     )
 
     refresh_notepad()
+
+class ScheduleImageButton(discord.ui.Button):
+    def __init__(
+        self,
+        content: str,
+        image_path: str
+    ):
+        super().__init__(
+            label=f"{content} 이미지"[:80],
+            style=discord.ButtonStyle.secondary
+        )
+
+        self.image_path = image_path
+
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
+        if not os.path.isfile(self.image_path):
+            await interaction.response.send_message(
+                "등록된 이미지 파일을 찾을 수 없습니다.",
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.send_message(
+            file=discord.File(self.image_path),
+            ephemeral=True
+        )
+
+
+class ScheduleView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=300)
+
+        button_count = 0
+
+        for schedule_date, content, important, image in allSchedules:
+            if not image:
+                continue
+
+            if button_count >= 25:
+                break
+
+            self.add_item(
+                ScheduleImageButton(
+                    content,
+                    image
+                )
+            )
+
+            button_count += 1
 
 
 @bot.tree.command(
@@ -179,9 +276,10 @@ async def show_schedules(
     now = datetime.now(KST)
 
     print(
-    f"[{now:%Y-%m-%d %H:%M:%S}] "
-    f"{interaction.user.display_name} "
-    f"/일정정리 사용")   
+        f"[{now:%Y-%m-%d %H:%M:%S}] "
+        f"{interaction.user.display_name} "
+        f"/일정정리 사용"
+    )
 
     if not allSchedules:
         await interaction.response.send_message(
@@ -192,24 +290,87 @@ async def show_schedules(
 
     message = ""
 
-    for schedule_date, content, important in allSchedules:
+    for schedule_date, content, important, image in allSchedules:
         message += f"날짜: {schedule_date} 내용: {content}\n"
 
-    await interaction.response.send_message(message,
-            ephemeral=True)
+    view = ScheduleView()
+
+    await interaction.response.send_message(
+        message,
+        view=view if view.children else None,
+        ephemeral=True
+    )
 
 
-#일정 정렬
+@bot.tree.command(
+    name="이미지등록",
+    description="이미지를 등록합니다."
+)
+@app_commands.describe(
+    image="이미지"
+)
+async def register_image(
+    interaction: discord.Interaction,
+    image: discord.Attachment
+):
+    now = datetime.now(KST)
+
+    print(
+        f"[{now:%Y-%m-%d %H:%M:%S}] "
+        f"{interaction.user.display_name} "
+        f"/이미지등록 사용"
+    )
+
+    if not is_op_user(interaction.user):
+        await interaction.response.send_message(
+            "권한이 없습니다.",
+            ephemeral=True
+        )
+        return
+
+    os.makedirs(
+        images_path,
+        exist_ok=True
+    )
+
+    file_name = os.path.basename(
+        image.filename
+    )
+
+    image_path = os.path.join(
+        images_path,
+        file_name
+    )
+
+    await image.save(
+        image_path
+    )
+
+    display_path = image_path.replace("\\", "/")
+
+    await interaction.response.send_message(
+        f"이미지가 등록되었습니다.\n"
+        f"경로: `{display_path}`",
+        ephemeral=True
+    )
+
+
+# 일정 정렬
 def sort_schedules():
-    allSchedules.sort(key=lambda x: x[0])
+    allSchedules.sort(
+        key=lambda x: x[0]
+    )
 
-#메모장 새로고침
+
+# 메모장 새로고침
 def refresh_notepad():
     sort_schedules()
 
     with open(file_path, "w", encoding="utf-8") as f:
-        for schedule_date, content, important in allSchedules:
-            f.write(f"{schedule_date} {content} {important}\n")
+        for schedule_date, content, important, image in allSchedules:
+            f.write(
+                f"{schedule_date}|{content}|{important}|{image}\n"
+            )
 
 
 @tasks.loop(minutes=1)
@@ -230,7 +391,7 @@ async def schedule_notifier():
     if channel is None:
         channel = await bot.fetch_channel(CHANNEL_ID)
 
-    for schedule_date, content, important in allSchedules:
+    for schedule_date, content, important, image in allSchedules:
         notify_date = schedule_date - timedelta(days=1)
 
         if now.date() != notify_date:
@@ -247,7 +408,9 @@ async def schedule_notifier():
     is_sunday = today.weekday() == 6
 
     if is_sunday and now.hour in [12, 15, 18, 21] and now.minute == 0:
-        await channel.send("오늘까지 배움일지 작성하세요.")
+        await channel.send(
+            "오늘까지 배움일지 작성하세요."
+        )
 
     is_friday = today.weekday() == 4
 
@@ -258,6 +421,7 @@ async def schedule_notifier():
                     f"{important_schedule[1]} 일정이 있습니다.\n"
                     f"날짜: {important_schedule[0]}"
                 )
+
 
 def is_op_user(user: discord.Member) -> bool:
     if not os.path.exists(op_file_path):
@@ -271,5 +435,6 @@ def is_op_user(user: discord.Member) -> bool:
         ]
 
     return user.display_name in op_list
+
 
 bot.run(TOKEN)
