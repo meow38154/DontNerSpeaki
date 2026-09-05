@@ -1,0 +1,5 @@
+2026-09-07|겜프 수행|False|/home/container/Images/겜프1.png
+2026-09-07|사회 게임 마무리|False|None
+2026-09-11|알고 발표|False|/home/container/Images/알고1.png
+2026-09-15|네트 수행|False|/home/container/Images/네트1.png
+2026-09-15|엔진 수행|False|None
